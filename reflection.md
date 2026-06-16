@@ -5,171 +5,169 @@
 
 ## 1. Benchmark Results Summary
 
-Tóm tắt kết quả từ Exercise 3.2:
+Summary of results from Exercise 3.2:
 
-**Overall pass rate:** 25.00%
+**Overall pass rate:** 20.00% (4 / 20 passed)
 
 **Average scores:**
 
 | Metric | Average | Min | Max | Std Dev |
 |--------|---------|-----|-----|---------|
-| Faithfulness | 0.64 | 0.00 | 1.00 | 0.28 |
-| Relevance | 0.42 | 0.00 | 0.90 | 0.21 |
-| Completeness | 0.56 | 0.00 | 1.00 | 0.35 |
-| Overall Score | 0.54 | 0.00 | 0.88 | 0.22 |
+| Faithfulness | 0.66 | 0.00 | 1.00 | 0.33 |
+| Relevance | 0.31 | 0.00 | 0.75 | 0.24 |
+| Completeness | 0.60 | 0.07 | 1.00 | 0.35 |
+| Overall Score | 0.53 | 0.06 | 0.92 | 0.23 |
 
-**Score interpretation (theo bài giảng):**
-- Bao nhiêu metrics ở Good (0.8–1.0)? 0
-- Bao nhiêu metrics ở Needs Work (0.6–0.8)? 1 (Faithfulness: 0.64)
-- Bao nhiêu metrics ở Significant Issues (<0.6)? 3 (Relevance: 0.42, Completeness: 0.56, Overall Score: 0.54)
+**Score interpretation:**
+- Number of metrics in Good (0.8–1.0): 0
+- Number of metrics in Needs Work (0.6–0.8): 2 (Faithfulness: 0.66, Completeness: 0.60)
+- Number of metrics in Significant Issues (<0.6): 2 (Relevance: 0.31, Overall Score: 0.53)
 
 **Failure type distribution:**
 
 | Failure Type | Count | Percentage |
 |--------------|-------|------------|
-| hallucination | 3 | 15.0% |
-| irrelevant | 4 | 20.0% |
-| incomplete | 2 | 10.0% |
-| off_topic | 6 | 30.0% |
+| hallucination | 4 | 25.0% |
+| irrelevant | 10 | 62.5% |
+| incomplete | 0 | 0.0% |
+| off_topic | 2 | 12.5% |
 | refusal | 0 | 0.0% |
 
 ---
 
 ## 2. Top 3 Worst Failures — 5 Whys Analysis
 
-Theo bài giảng: "Phân loại failure TRƯỚC KHI fix. Đừng fix từng failure riêng lẻ — CLUSTER rồi fix root cause."
+### Failure 1 (ID: H03)
 
-### Failure 1 (ID: M02)
+**Question:** How can I apply for credit transfer for a course taken at a foreign university?
 
-**Question:** Nếu điểm GPA tích lũy (CGPA) dưới 2.0 thì sinh viên sẽ bị xử lý như thế nào?
+**Agent Answer:** Course grade must be B+ or higher to apply for credit transfer.
 
-**Agent Answer:** Sinh viên sẽ bị cảnh cáo học vụ nếu GPA tích lũy dưới 2.0.
-
-**Scores:** Faithfulness: 0.00 | Relevance: 0.00 | Completeness: 0.00 | Overall: 0.00
+**Scores:** Faithfulness: 0.11 | Relevance: 0.00 | Completeness: 0.07 | Overall: 0.06
 
 **5 Whys Analysis:**
 | Level | Question | Answer |
 |-------|----------|--------|
-| Symptom | Vấn đề là gì? | Điểm số của tất cả các metrics đánh giá đều bằng 0 (Passed = No). |
-| Why 1 | Tại sao xảy ra? | Do câu trả lời sử dụng thuật ngữ "GPA tích lũy" thay vì "CGPA" như trong context, dẫn đến không khớp từ khóa. |
-| Why 2 | Tại sao Why 1 xảy ra? | Heuristic đánh giá chỉ dựa trên so sánh tập hợp từ (word-overlap) thuần túy mà không xem xét ngữ nghĩa. |
-| Why 3 | Tại sao Why 2 xảy ra? | Hệ thống đánh giá được lập trình đơn giản chỉ sử dụng phương pháp tokenization cơ bản để loại bỏ stopword. |
-| Why 4 | Root cause là gì? | Phương pháp đo lường lexical overlap thô sơ thất bại khi gặp từ đồng nghĩa tiếng Việt, không phản ánh đúng ngữ nghĩa. |
+| Symptom | What is the problem? | The overall evaluation score is extremely low (0.06), and the case is flagged as a hallucination failure. |
+| Why 1 | Why did this occur? | The agent's response contains incorrect facts (hallucinating "B+ or higher" grade requirement) and misses all procedural steps. |
+| Why 2 | Why did the agent generate incorrect facts? | The agent function is simulated, but in a real RAG system, the retriever either failed to retrieve the correct policy chunk or the generator ignored the correct threshold ("C or equivalent or higher"). |
+| Why 3 | Why did the evaluation metrics score it so poorly? | The low relevance score (0.00) is caused by a lack of lexical overlap with the question tokens, and the low completeness score (0.07) is due to omitting the transfer submission procedure and syllabus requirements. |
+| Why 4 | What is the root cause? | The generator system prompt does not enforce strict fidelity to the retrieved context, allowing the model to hallucinate incorrect grade criteria. Additionally, the lexical overlap evaluator is too sensitive to phrasing differences. |
 
 **Root cause (from `find_root_cause()`):**
-> `Multiple issues detected — review full pipeline` (Do cả 3 điểm đều sập về 0.0 nên thuật toán xác định là tie).
+> `Answer does not address the question — improve prompt clarity`
 
-**Bạn có đồng ý với root cause suggestion không? Tại sao?**
-> Đồng ý một phần. Vì các điểm số đều bằng 0 nên bị coi là lỗi hệ thống toàn diện. Thực chất đây là lỗi của phương thức đo lường (word overlap) không xử lý được từ đồng nghĩa tiếng Việt.
+**Do you agree with the root cause suggestion? Why?**
+> Partly agree. The algorithm flags relevance as the lowest score (0.00), hence suggesting prompt clarity. In reality, this is a severe hallucination/faithfulness error ("B+" vs "C") combined with extreme incompleteness. The root cause is a failure of the generator to stick to the context (hallucination) and lack of detailed instructions to cover all steps in the expected answer.
 
-**Proposed fix (cụ thể, actionable):**
-> - Thay thế word overlap heuristic bằng các metric đánh giá ngữ nghĩa chuyên dụng như BERTScore hoặc Sentence Transformers Similarity.
-> - Bổ sung tài liệu từ đồng nghĩa hoặc hướng dẫn LLM Generator thống nhất thuật ngữ viết tắt của trường.
+**Proposed fix (specific, actionable):**
+> - Enhance the system prompt of the generator to explicitly forbid making up grades/thresholds, requiring a direct quote of the criteria.
+> - Use a semantic relevance evaluator (e.g., embeddings) instead of exact word overlap to avoid artificial 0.00 relevance scores when the answer is short but related.
 
 ---
 
-### Failure 2 (ID: A03)
+### Failure 2 (ID: H05)
 
-**Question:** Điểm số của kỳ thi kiểm tra đầu vào tại Đại học Fulbright Việt Nam được tính như thế nào?
+**Question:** What is the rule for a student who takes an unauthorized leave of absence for more than one semester?
 
-**Agent Answer:** Đại học Fulbright Việt Nam tính điểm số kỳ thi kiểm tra đầu vào dựa trên bài luận và phỏng vấn cá nhân.
+**Agent Answer:** Students taking unauthorized leave are expelled permanently from the university.
 
-**Scores:** Faithfulness: 0.09 | Relevance: 0.70 | Completeness: 0.12 | Overall: 0.30
+**Scores:** Faithfulness: 0.29 | Relevance: 0.18 | Completeness: 0.12 | Overall: 0.20
 
 **5 Whys Analysis:**
 | Level | Question | Answer |
 |-------|----------|--------|
-| Symptom | Vấn đề là gì? | Điểm Faithfulness và Completeness cực kỳ thấp, câu trả lời bị xếp vào nhóm bịa đặt thông tin. |
-| Why 1 | Tại sao xảy ra? | Agent cố trả lời về quy chế của một đại học khác (Fulbright) không hề có trong cơ sở tri thức của RAG. |
-| Why 2 | Tại sao Why 1 xảy ra? | Agent không phát hiện ra câu hỏi này là nằm ngoài phạm vi hoạt động của hệ thống (out-of-scope). |
-| Why 3 | Tại sao Why 2 xảy ra? | Hệ thống chưa có bộ lọc intent hoặc cơ chế kiểm soát đầu vào ở tầng Gateway. |
-| Why 4 | Root cause là gì? | Thiếu bộ phân loại ý định (Query Intent Classifier) để chặn và từ chối các câu hỏi nằm ngoài phạm vi VinUni. |
+| Symptom | What is the problem? | The overall score is very low (0.20), classified as a hallucination failure. |
+| Why 1 | Why did this occur? | The agent claims students are "expelled permanently," which contradicts the actual rule ("classified as withdrawn and must apply for readmission"). |
+| Why 2 | Why did the agent hallucinate the permanent expulsion rule? | The generator made a wild assumption or relied on pre-trained bias about disciplinary actions rather than the retrieved policy chunk. |
+| Why 3 | Why did the evaluator score it low? | Faithfulness is low (0.29) because "expelled permanently" is not supported by the context. Completeness is low (0.12) because it misses the readmission process. |
+| Why 4 | What is the root cause? | Lack of a strict grounding guardrail in the generator's prompt and the lack of a secondary validation step (hallucination filter) to reject unsupported claims before returning them. |
 
-**Root cause:**
-> `Context is missing or irrelevant — improve retrieval` (Do Faithfulness 0.09 là điểm thấp nhất).
+**Root cause (from `find_root_cause()`):**
+> `Answer is missing key information — increase context window or improve generation`
 
-**Bạn có đồng ý với root cause suggestion không? Tại sao?**
-> Đồng ý. Do context nạp vào không chứa dữ liệu về Đại học Fulbright nên Retriever không lấy được thông tin đúng, dẫn đến việc Generator bịa đặt câu trả lời.
+**Do you agree with the root cause suggestion? Why?**
+> Agree. The minimum score is Completeness (0.12), triggering this suggestion. The generator completely missed the critical instruction that the student is "classified as withdrawn and must apply for readmission", substituting it with "expelled permanently". Improving generation quality and prompt constraints is the key fix.
 
-**Proposed fix:**
-> - Triển khai một Gateway Intent Classifier sử dụng Few-shot learning để phát hiện câu hỏi ngoài lề (out-of-scope) và trả về câu trả lời từ chối mẫu.
-> - Thêm ràng buộc trong system prompt để LLM từ chối trả lời nếu độ tương thích tài liệu lấy ra thấp.
+**Proposed fix (specific, actionable):**
+> - Add strict negative constraints in the prompt: "If the exact outcome/status is not in the context, do not assume or exaggerate disciplinary outcomes (e.g., do not say expelled unless explicitly stated)."
+> - Implement a self-correction/refinement loop where the model verifies if the generated status matches the retrieved policy.
 
 ---
 
-### Failure 3 (ID: M07)
+### Failure 3 (ID: A03)
 
-**Question:** Sinh viên nghỉ ốm làm thế nào để được chấp nhận nghỉ học có phép cho buổi kiểm tra giữa kỳ?
+**Question:** How is the admission test score calculated at Fulbright University Vietnam?
 
-**Agent Answer:** Sinh viên nghỉ ốm cần nộp đơn xin nghỉ và thi bù lên văn phòng học vụ.
+**Agent Answer:** Admission test scores at Fulbright University Vietnam are calculated based on personal essays.
 
-**Scores:** Faithfulness: 0.38 | Relevance: 0.25 | Completeness: 0.29 | Overall: 0.31
+**Scores:** Faithfulness: 0.00 | Relevance: 0.75 | Completeness: 0.13 | Overall: 0.29
 
 **5 Whys Analysis:**
 | Level | Question | Answer |
 |-------|----------|--------|
-| Symptom | Vấn đề là gì? | Điểm Relevance và Completeness rất thấp, lỗi phân loại là `irrelevant`. |
-| Why 1 | Tại sao xảy ra? | Agent bỏ sót các chi tiết điều kiện hành chính cốt lõi (như nộp trong 3 ngày làm việc, giấy khám của bệnh viện). |
-| Why 2 | Tại sao Why 1 xảy ra? | LLM Generator bị xu hướng khái quát hóa quá mức, trả lời chung chung cho nhanh. |
-| Why 3 | Tại sao Why 2 xảy ra? | Prompt của Generator không có chỉ thị bắt buộc trích xuất đầy đủ các chi tiết định lượng (thời gian, mốc ngày). |
-| Why 4 | Root cause là gì? | Thiếu các ràng buộc về tính đầy đủ và chính xác số liệu hành chính trong Generator system prompt. |
+| Symptom | What is the problem? | The overall score is 0.29, classified as a hallucination failure due to a Faithfulness score of 0.00. |
+| Why 1 | Why did this occur? | The agent attempts to answer how Fulbright calculations work, despite the context saying it is out of scope. |
+| Why 2 | Why did the agent attempt to answer it? | The agent did not recognize the prompt as adversarial/trap or did not implement strict out-of-scope refusal logic. |
+| Why 3 | Why did the evaluator score Faithfulness as 0.00? | The retrieved context contains only general info about VinUniversity and does not support the claim about Fulbright's personal essays. |
+| Why 4 | What is the root cause? | Absence of an intent routing/classification gateway to detect and block out-of-scope questions, and the generator's tendency to be overly helpful instead of refusing. |
 
-**Root cause:**
-> `Answer does not address the question — improve prompt clarity` (Do Relevance 0.25 là thấp nhất).
+**Root cause (from `find_root_cause()`):**
+> `Context is missing or irrelevant — improve retrieval`
 
-**Bạn có đồng ý với root cause suggestion không? Tại sao?**
-> Đồng ý một phần. Gợi ý chỉ ra cần cải thiện prompt clarity của generator để bám sát câu hỏi hơn, giúp đưa ra câu trả lời chứa đầy đủ các khía cạnh hành chính bắt buộc.
+**Do you agree with the root cause suggestion? Why?**
+> Agree. The Faithfulness score is 0.00 because the context does not contain any information about Fulbright. While the retriever successfully retrieved VinUniversity context, it was irrelevant to the query. The generator should have refused to answer based on this mismatch.
 
-**Proposed fix:**
-> - Cập nhật system prompt của Generator với định dạng đầu ra bắt buộc phải liệt kê rõ: (1) Hồ sơ yêu cầu, (2) Thời hạn thực hiện, (3) Địa điểm/Email tiếp nhận.
+**Proposed fix (specific, actionable):**
+> - Implement a query intent classification step before the retrieval phase to identify out-of-scope queries (e.g., questions about other universities) and reject them immediately.
+> - Configure the generator to return a standard out-of-scope refusal response if the retrieved context does not contain direct answers to the query.
 
 ---
 
 ## 3. Failure Clustering
 
-Theo bài giảng: "Fix 1 root cause giải quyết nhiều failures cùng lúc."
-
 **Cluster Analysis:**
 
 | Cluster | Root Cause | Failures in cluster | Priority |
-|---------|-----------|--------------------:|----------|
-| 1 | Thiếu bộ lọc câu hỏi ngoài phạm vi (Out-of-scope) | A01, A02, A03 | High |
-| 2 | Generator tóm tắt quá mức, thiếu mốc thời gian/giấy tờ cụ thể | M01, M02, M03, M04, M05, M06, M07 | High |
-| 3 | Khác biệt từ ngữ đồng nghĩa tiếng Việt (GPA tích lũy vs CGPA) | E02, H01, H02, H03, H04, H05 | Medium |
+|---------|------------|---------------------|----------|
+| 1 | Out-of-scope / Adversarial queries not refused | A01, A02, A03 | High |
+| 2 | Generator hallucinations (wrong rules, grades, penalties) | H01, H02, H03, H04, H05 | High |
+| 3 | Lexical overlap heuristic limits (false low relevance / completeness) | E02, E04, M03, M04, M05, M07 | Medium |
+| 4 | Incomplete answers (missing key requirements / exceptions) | M01, M02 | Medium |
 
-**Nếu chỉ fix 1 cluster, bạn chọn cluster nào? Tại sao?**
-> Tôi chọn **Cluster 2 (Generator tóm tắt quá mức, thiếu chi tiết định lượng)**. Đây là nhóm lỗi chiếm tỷ trọng lớn nhất (7/15 failures). Bằng việc tinh chỉnh prompt yêu cầu trích xuất toàn bộ điều kiện và mốc thời gian hành chính, ta có thể cải thiện đáng kể điểm Completeness và Relevance của đa phần các câu hỏi nghiệp vụ thực tế.
+**If you could only fix one cluster, which one would you choose? Why?**
+> I choose **Cluster 2 (Generator hallucinations)**. In the context of academic regulations and admissions, providing false information (such as stating a student is permanently expelled instead of withdrawn, or requiring a B+ instead of a C for credit transfer) is the most critical risk. Hallucinations destroy user trust and can lead to severe academic and administrative disputes. Fixing this cluster by enforcing strict prompt grounding and verification will directly improve the Faithfulness metric, which is the absolute baseline of safety for any business/academic assistant.
 
 ---
 
-## 4. Improvement Log (from `generate_improvement_log`)
+## 4. Improvement Log
 
-Đầu ra của `generate_improvement_log()`:
+Output of `generate_improvement_log()`:
 
-```
 | Failure ID | Type | Root Cause | Suggested Fix | Status |
 |------------|------|------------|---------------|--------|
-| F001 | off_topic | Answer does not address the question — improve prompt clarity | Implement hallucination checker to filter unsupported claims | Open |
-| F002 | off_topic | Answer is missing key information — increase context window or improve generation | Enforce strict grounding in prompt (e.g., 'only use the context provided') | Open |
-| F003 | hallucination | Multiple issues detected — review full pipeline | Increase chunk size in RAG pipeline to reduce context fragmentation | Open |
-| F004 | off_topic | Answer is missing key information — increase context window or improve generation | Add few-shot examples showing complete answers to improve completeness | Open |
-| F005 | irrelevant | Answer does not address the question — improve prompt clarity | Refine system prompt and routing mechanism to improve question relevancy | Open |
-| F006 | off_topic | Answer does not address the question — improve prompt clarity | Use query expansion or HyDE to retrieve more relevant documents | Open |
+| F001 | irrelevant | Answer does not address the question — improve prompt clarity | Implement hallucination checker to filter unsupported claims | Open |
+| F002 | irrelevant | Answer does not address the question — improve prompt clarity | Enforce strict grounding in prompt (e.g., 'only use the context provided') | Open |
+| F003 | off_topic | Answer does not address the question — improve prompt clarity | Refine system prompt and routing mechanism to improve question relevancy | Open |
+| F004 | off_topic | Answer is missing key information — increase context window or improve generation | Use query expansion or HyDE to retrieve more relevant documents | Open |
+| F005 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F006 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
 | F007 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
-| F008 | incomplete | Answer is missing key information — increase context window or improve generation | N/A | Open |
-| F009 | off_topic | Answer does not address the question — improve prompt clarity | N/A | Open |
-| F010 | incomplete | Answer is missing key information — increase context window or improve generation | N/A | Open |
-| F011 | irrelevant | Answer is missing key information — increase context window or improve generation | N/A | Open |
-| F012 | off_topic | Answer is missing key information — increase context window or improve generation | N/A | Open |
-| F013 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
-| F014 | hallucination | Context is missing or irrelevant — improve retrieval | N/A | Open |
-| F015 | hallucination | Context is missing or irrelevant — improve retrieval | N/A | Open |
-```
+| F008 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F009 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F010 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F011 | hallucination | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F012 | irrelevant | Answer is missing key information — increase context window or improve generation | N/A | Open |
+| F013 | hallucination | Answer is missing key information — increase context window or improve generation | N/A | Open |
+| F014 | irrelevant | Answer does not address the question — improve prompt clarity | N/A | Open |
+| F015 | hallucination | Multiple issues detected — review full pipeline | N/A | Open |
+| F016 | hallucination | Context is missing or irrelevant — improve retrieval | N/A | Open |
 
-**Thêm 3 improvement suggestions từ `generate_improvement_suggestions()`:**
-1. Implement hallucination checker to filter unsupported claims
-2. Enforce strict grounding in prompt (e.g., 'only use the context provided')
-3. Increase chunk size in RAG pipeline to reduce context fragmentation
+**Actionable improvement suggestions from analysis:**
+1. Implement hallucination checker to filter unsupported claims.
+2. Enforce strict grounding in prompt (e.g., 'only use the context provided').
+3. Refine system prompt and routing mechanism to improve question relevancy.
+4. Use query expansion or HyDE to retrieve more relevant documents.
 
 ---
 
@@ -177,55 +175,52 @@ Theo bài giảng: "Fix 1 root cause giải quyết nhiều failures cùng lúc.
 
 ### CI/CD Integration
 
-**Câu 1: Khi nào chạy `run_regression()` trong production system?**
-> Tự động trigger trong CI/CD pipeline khi:
-> 1. Thay đổi code của hệ thống (Retriever hoặc Generator logic).
-> 2. Có sự chỉnh sửa hoặc cập nhật System Prompt.
-> 3. Cập nhật dữ liệu tài liệu mới vào cơ sở tri thức (Knowledge Base).
-> 4. Nâng cấp phiên bản mô hình LLM nền tảng.
+**Question 1: When should you run `run_regression()` in a production system?**
+> It should be automatically triggered in the CI/CD pipeline when:
+> 1. Code changes are made to the retrieval or generation components.
+> 2. The system prompt is modified.
+> 3. New data/documents are added or updated in the knowledge base.
+> 4. The LLM model version is updated.
 
-**Câu 2: Threshold regression 0.05 có phù hợp domain của bạn không?**
-> Không phù hợp. Đối với quy chế học vụ và tuyển sinh đại học (liên quan trực tiếp đến tài chính, tốt nghiệp, kỷ luật), sai số 0.05 là quá lỏng lẻo. Cần đặt threshold khắt khe hơn: `0.02` cho Relevance/Completeness, và bắt buộc phải là `0.00` (không chấp nhận bất cứ sự sụt giảm nào) đối với Faithfulness để tránh hoàn toàn hallucination.
+**Question 2: Is the regression threshold of 0.05 appropriate for your domain?**
+> No, it is too lenient. For academic regulations and admissions (involving tuition fees, graduation criteria, disciplinary actions), a regression of 0.05 is unsafe. We should enforce a stricter threshold: `0.02` for relevance and completeness, and a strict `0.00` (zero tolerance) for faithfulness regressions to prevent any new hallucinations.
 
-**Câu 3: Khi phát hiện regression — block deployment hay chỉ alert?**
-> **Bắt buộc block deployment**. Đưa thông tin sai lệch về quy chế học viện lên production sẽ gây hậu quả pháp lý và nhầm lẫn nghiêm trọng cho sinh viên. Trade-off là có thể làm chậm tốc độ release khi có thay đổi nhỏ, nhưng đảm bảo an toàn tuyệt đối.
+**Question 3: When a regression is detected, should you block deployment or just alert?**
+> **Block deployment**. Serving incorrect academic regulations can lead to serious compliance, legal, and trust issues. Although blocking might slow down release speeds, correctness is paramount in this domain.
 
-**Câu 4: Eval pipeline nên chạy ở đâu trong CI/CD flow?**
-
-```
-Code change → [Chạy unit test logic code] → [Chạy benchmark eval 20 QA] → [Kiểm tra regression & threshold] → Deploy
-                 (bước 1)                   (bước 2)                       (bước 3)
-```
+**Question 4: Where should the eval pipeline run in the CI/CD flow?**
+> ```
+> Code change → [Run unit tests] → [Run benchmark eval (20 QA)] → [Verify regression & thresholds] → Deploy
+>                  (Step 1)                   (Step 2)                       (Step 3)
+> ```
 
 ---
 
 ## 6. Continuous Improvement Loop
 
-Theo bài giảng: Evaluate → Analyze → Improve → Augment (add to benchmark) → lặp lại
+**Based on today's lab, the next 3 actions to improve the agent:**
 
-**Sau lab hôm nay, 3 actions tiếp theo bạn sẽ làm để improve agent:**
-
-| Priority | Action | Metric sẽ improve | Expected impact |
+| Priority | Action | Metric to improve | Expected impact |
 |----------|--------|-------------------|-----------------|
-| 1 | Triển khai Gateway Intent Classifier để lọc câu hỏi ngoài phạm vi (out-of-scope). | Relevance, Safety | Loại bỏ triệt để các lỗi lạc đề và tấn công prompt injection. |
-| 2 | Chỉnh sửa Generator system prompt, ép định dạng đầu ra phải liệt kê đủ các mốc thời gian và hồ sơ. | Completeness | Cải thiện mạnh mẽ chất lượng thông tin học vụ được cung cấp. |
-| 3 | Tích hợp Reranker (BGE-Reranker) để chọn lọc và sắp xếp lại tài liệu. | Context Precision | Đưa các tài liệu chính xác nhất lên đầu, giảm nhiễu thông tin. |
+| 1 | Implement a Query Intent Classifier to detect out-of-scope / adversarial queries before retrieval. | Relevance, Safety | Eliminates irrelevant responses and prompt injection exploits. |
+| 2 | Refine Generator System Prompt to enforce strict grounding and structured outputs (e.g., listing exact credits, document lists, and dates). | Completeness, Faithfulness | Significantly reduces hallucinations and missing information. |
+| 3 | Integrate a semantic reranker (like BGE-Reranker) to order retrieved context. | Context Precision | Puts the most relevant information at the top of the context, improving generation quality. |
 
-**Bạn sẽ thêm failure cases nào vào benchmark cho sprint tiếp theo?**
-> - Câu hỏi so sánh trực tiếp quy chế qua các năm học khác nhau (ví dụ: Quy định tốt nghiệp năm 2024 có gì khác năm 2025?).
-> - Các câu hỏi sử dụng từ lóng/viết tắt của sinh viên (như "rút môn", "học bổng học kỳ", "nợ môn") để kiểm tra tính linh hoạt của retriever.
+**What failure cases will you add to the benchmark for the next sprint?**
+> - Comparative queries about changes in academic policies across different catalog years (e.g., graduation requirements for cohort 2024 vs 2025).
+> - Queries using local student slang or abbreviations (e.g., "course withdrawal", "under probation", "scholarship renewal") to test retrieval robustness.
 
 ---
 
 ## 7. Framework Reflection
 
-**Framework bạn đã dùng trong lab:** Custom Heuristic Evaluator (RAGAS-inspired)
+**Framework used in lab:** Custom Heuristic Evaluator (RAGAS-inspired)
 
-**Nếu dùng trong production, bạn sẽ chọn framework nào? Tại sao?**
-> Tôi chọn **DeepEval**.
+**If used in production, which framework would you choose and why?**
+> I choose **DeepEval**.
 
-| Tiêu chí | Lý do chọn |
-|----------|------------|
-| Focus phù hợp vì... | Hỗ trợ Unit testing rất tốt thông qua cơ chế test case assertions tựa pytest, giúp phát hiện lỗi cực nhanh ngay trong quá trình coding. |
-| CI/CD integration vì... | CLI hỗ trợ tích hợp sâu với GitHub Actions, tự động xuất báo cáo HTML trực quan cho mỗi lần pull request. |
-| Team workflow vì... | Có cổng dashboard trực quan (Confident AI) giúp lưu trữ lịch sử chấm điểm, thống kê failure logs giúp team phân tích lỗi dễ dàng. |
+| Criteria | Why DeepEval? |
+|----------|---------------|
+| Focus alignment | Excellent support for unit testing with pytest-like assertions, allowing quick testing during development. |
+| CI/CD integration | Command-line interface integrates seamlessly with GitHub Actions, automatically outputting visual reports for pull requests. |
+| Team workflow | Confident AI dashboard allows team members to visualize evaluation histories, track metrics over time, and debug failure logs easily. |
